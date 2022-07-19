@@ -110,14 +110,15 @@ namespace Pepperi.SDK.Endpoints.Base
         public UDC_UploadFile_Result BulkUploadFile(string schemeName, string filePath)
         {
             var fileExtention = GetValidatedFileExtention(filePath);
+            var contentType = MapFileExtentionToContentType(fileExtention);
             var key = Guid.NewGuid().ToString();
-            var presignedUrlToPut = GetPresignedUrl(key);
+            var presignedUrlToPut = GetPresignedUrl(key, contentType);
 
             var fileData = ReadFileByteArray(filePath);
-            var statusCode = UploadDataToAws(presignedUrlToPut, fileData);
+            var statusCode = UploadDataToAws(presignedUrlToPut, fileData, contentType);
             ValuesValidator.Validate(statusCode == HttpStatusCode.OK, "Can't upload data to AWS!");
 
-            var ipaasUrlToGetFile = GetIpaasUrl($"Aws/GetAwsData?key={key}&ClientToken={this.AuthentificationManager.IdpAuth.APIToken}&extention=.json");
+            var ipaasUrlToGetFile = GetIpaasUrl($"Aws/GetAwsData?key={key}&ClientToken={this.AuthentificationManager.IdpAuth.APIToken}&contentType={contentType}&extention={fileExtention}");
             var importFileResponse = ImportFileToPepperi(schemeName, ipaasUrlToGetFile);
             var result = GetImportFileDataResult(importFileResponse);
             return result;
@@ -128,22 +129,26 @@ namespace Pepperi.SDK.Endpoints.Base
 
         #region Private Methods
 
-        private string GetPresignedUrl(string key)
+        private string GetPresignedUrl(string key, string contentType = "application/json")
         {
-            var requestUri = "Aws/GetAwsPreSignedUrlForPut?key=" + key;
+            var requestUri = "Aws/GetAwsPreSignedUrlForPut";
+            var queryParams = new Dictionary<string, string>() {
+                { "key", key},
+                { "contentType", contentType}
+            };
             string accept = "application/json";
             PepperiHttpClient PepperiHttpClient = new PepperiHttpClient(this.AuthentificationManager.IpaasAuth, this.Logger);
             PepperiHttpClientResponse PepperiHttpClientResponse = PepperiHttpClient.Get(
                     IpaasBaseUri,
                     requestUri,
-                    new Dictionary<string, string>(),
+                    queryParams,
                     accept
                     );
 
             var deserialized = PepperiJsonSerializer.DeserializeOne<GenericIpaasResponse<IEnumerable<string>>>(PepperiHttpClientResponse.Body);
             return deserialized.Data.FirstOrDefault();
         }
-        private HttpStatusCode UploadDataToAws(string url, byte[] data)
+        private HttpStatusCode UploadDataToAws(string url, byte[] data, string contentType = "application/json")
         {
             var HttpClient = new HttpClient(new LoggingHandler(this.Logger))
             {
@@ -153,7 +158,7 @@ namespace Pepperi.SDK.Endpoints.Base
             //send request
             HttpClient.Timeout = new TimeSpan(0, 5, 0);// by default wait 5 minutes
             var content = new ByteArrayContent(data);
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+            content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             HttpResponseMessage HttpResponseMessage = HttpClient.PutAsync(url, content).Result;
             string body = HttpResponseMessage.Content.ReadAsStringAsync().Result;
             return HttpResponseMessage.StatusCode;
@@ -191,13 +196,14 @@ namespace Pepperi.SDK.Endpoints.Base
             return PepperiJsonSerializer.DeserializeOne<PepperiResponseForAuditLog>(PepperiHttpClientResponse.Body);
         }
 
-        private UDC_UploadFile_Result GetImportFileDataResult(PepperiAuditLog auditLog) {
+        private UDC_UploadFile_Result GetImportFileDataResult(PepperiAuditLog auditLog)
+        {
             var logResultObject = auditLog?.AuditInfo?.ResultObject;
             var parsedResultObject = PepperiJsonSerializer.DeserializeOne<UDC_UploadFile_AuditLog_ResultObject>(logResultObject);
             var url = parsedResultObject?.URI;
             ValuesValidator.Validate(url, "Can't get URI Response!");
 
-            var HttpClient = new HttpClient(new LoggingHandler(this.Logger)){};
+            var HttpClient = new HttpClient(new LoggingHandler(this.Logger)) { };
 
             //send request
             HttpClient.Timeout = new TimeSpan(0, 5, 0);// by default wait 5 minutes
@@ -241,7 +247,7 @@ namespace Pepperi.SDK.Endpoints.Base
                 }
             }
 
-            
+
             return result;
         }
         private string GetValidatedFileExtention(string inputFilename)
@@ -253,6 +259,21 @@ namespace Pepperi.SDK.Endpoints.Base
 
             return extention;
         }
+
+        private string MapFileExtentionToContentType(string extention)
+        {
+            switch (extention)
+            {
+                case ".json":
+                    return "application/json";
+                case ".csv":
+                    return "text/csv";
+                default:
+                    ValuesValidator.Validate(false, "Can't Map File Extention to Content Type!");
+                    return null;
+            }
+        }
+
         private byte[] ReadFileByteArray(string inputFilename)
         {
             return File.ReadAllBytes(inputFilename);
