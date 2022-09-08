@@ -90,7 +90,7 @@ namespace Pepperi.SDK
             this.UserDefinedTables = new UserDefinedTablesEndpoint(ApiBaseUri, Authentication, Logger);
             this.UserDefinedTablesMetaData = new UserDefinedTableMetaData_Endpoint(ApiBaseUri, Authentication, Logger);
 
-            this.UserDefinedCollectionsMetaData = new UserDefinedCollectionsMetaData_Endpoint(AuthentificationManager.IdpAuth, Logger);
+            this.UserDefinedCollectionsMetaData = new UserDefinedCollectionsMetaData_Endpoint(AuthentificationManager?.IdpAuth, Logger);
             this.UserDefinedCollections = new UserDefinedCollectionsEndpoint(AuthentificationManager, Logger);
         }
 
