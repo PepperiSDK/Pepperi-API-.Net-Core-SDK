@@ -242,7 +242,7 @@ namespace Pepperi.SDK.Endpoints.Base
 
         #endregion
 
-        public void ExportAsync(string schemeName, string filePath, string format = null, string where = null, string fields = null, string delimiter = null, IEnumerable<string> excludedKeys = null)
+        public void ExportAsync(string schemeName, string filePath, string format = null, string where = null, string fields = null, string delimiter = null, IEnumerable<string> excludedKeys = null, bool? includeDeleted = null)
         {
             ValuesValidator.Validate(filePath, "File Path is empty!");
             var parent = Directory.GetParent(filePath);
@@ -250,7 +250,7 @@ namespace Pepperi.SDK.Endpoints.Base
             var fileExtension = Path.GetExtension(filePath);
             ValuesValidator.Validate(fileExtension == ".json" || fileExtension == ".csv", "Incorrect file extension! (Should be .json or .csv)");
 
-            var fileUrl = ExportFile(schemeName, format, where, fields, delimiter, excludedKeys);
+            var fileUrl = ExportFile(schemeName, format, where, fields, delimiter, excludedKeys, includeDeleted: includeDeleted);
             var response = GetRequestByteArrayBody(fileUrl);
 
             File.WriteAllBytes(filePath, response);
@@ -337,10 +337,10 @@ namespace Pepperi.SDK.Endpoints.Base
         }
 
         private string ExportFile(string schemeName, string format = null, string where = null,
-            string fields = null, string delimiter = null, IEnumerable<string> excludedKeys = null)
+            string fields = null, string delimiter = null, IEnumerable<string> excludedKeys = null, bool? includeDeleted = null)
         {
 
-            var exportFileResponse = SendExportFileRequest(schemeName, format, where, fields, delimiter, excludedKeys);
+            var exportFileResponse = SendExportFileRequest(schemeName, format, where, fields, delimiter, excludedKeys, includeDeleted: includeDeleted);
             var auditLogId = exportFileResponse.ExecutionUUID;
             var finalAuditLog = this.AuditLogs.AuditLogPolling(auditLogId);
 
@@ -555,7 +555,7 @@ namespace Pepperi.SDK.Endpoints.Base
         /// <returns></returns>
         private PepperiResponseForAuditLog SendExportFileRequest(string schemeName,
             string format = null, string where = null,
-            string fields = null, string delimiter = null, IEnumerable<string> excludedKeys = null)
+            string fields = null, string delimiter = null, IEnumerable<string> excludedKeys = null, bool? includeDeleted = null)
         {
 
             var requestUri = $"resources/{HttpUtility.UrlEncode(schemeName)}/export/file";
@@ -567,7 +567,8 @@ namespace Pepperi.SDK.Endpoints.Base
                 Where = where,
                 Fields = fields,
                 Delimiter = delimiter,
-                ExcludedKeys = excludedKeys
+                ExcludedKeys = excludedKeys,
+                IncludeDeleted = includeDeleted ?? false
             });
             string contentType = "application/json";
             string accept = "application/json";
